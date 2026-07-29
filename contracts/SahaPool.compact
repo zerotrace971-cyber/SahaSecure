@@ -1,0 +1,202 @@
+pragma language_version 0.23;
+
+import CompactStandardLibrary;
+
+// Saha intentionally keeps only rules, status, aggregate reporting, counters,
+// and opaque commitment roots on the public ledger. Identities and individual
+// contribution / claim values remain witnesses supplied by the caller.
+
+export enum PoolStatus {
+  OPEN,
+  SETTLING,
+  CLOSED
+}
+
+export ledger status: PoolStatus;
+
+export ledger rulesDigest: Bytes<32>;
+
+export ledger eligibilityDigest: Bytes<32>;
+
+export ledger settlementAuthorityDigest: Bytes<32>;
+
+export ledger aggregateContributions: Uint<128>;
+
+export ledger aggregateClaims: Uint<128>;
+
+export ledger memberCount: Counter;
+
+export ledger contributionCount: Counter;
+
+export ledger claimCount: Counter;
+
+export ledger round: Counter;
+
+// These are opaque cryptographic commitments, never raw identity or amount data.
+export ledger membershipCommitment: Bytes<32>;
+
+export ledger contributionCommitment: Bytes<32>;
+
+export ledger claimCommitment: Bytes<32>;
+
+constructor(publicRulesDigest: Bytes<32>,
+            publicEligibilityDigest: Bytes<32>,
+            publicSettlementAuthorityDigest: Bytes<32>
+            ) {
+  status = PoolStatus.OPEN;
+  // Deployment rules and the eligibility-root digest are intentionally public.
+  rulesDigest = disclose(publicRulesDigest);
+  eligibilityDigest = disclose(publicEligibilityDigest);
+  settlementAuthorityDigest = disclose(publicSettlementAuthorityDigest);
+  aggregateContributions = 0;
+  aggregateClaims = 0;
+  round.increment(1);
+}
+
+// All witness values are private inputs supplied by the dApp at prove time.
+witness localMemberSecret(): Bytes<32>;
+
+witness eligibilitySecret(): Bytes<32>;
+
+witness privateContributionAmount(): Uint<64>;
+
+witness privateContributionBlinding(): Bytes<32>;
+
+witness privateClaimAmount(): Uint<64>;
+
+witness privateClaimBlinding(): Bytes<32>;
+
+witness settlementAuthoritySecret(): Bytes<32>;
+
+witness reportedContributionAggregate(): Uint<128>;
+
+witness reportedClaimAggregate(): Uint<128>;
+
+export circuit joinPool(): [] {
+  assert(status == PoolStatus.OPEN, "Pool is not open for new members");
+  assert(eligibilityDigest == eligibilityCommitment(eligibilitySecret()),
+         "Private eligibility proof did not verify"
+         );
+
+  // disclose() is deliberate: the one-way commitment is safe to persist, while
+  // the member secret itself remains a private witness.
+  membershipCommitment =
+    disclose(memberCommitment(localMemberSecret(), memberCount as Field as Bytes<32>));
+  memberCount.increment(1);
+}
+
+export circuit contributeConfidentially(): [] {
+  assert(status == PoolStatus.OPEN, "Pool is not accepting contributions");
+  assert(eligibilityDigest == eligibilityCommitment(eligibilitySecret()),
+         "Private eligibility proof did not verify"
+         );
+
+  const amount = privateContributionAmount();
+  assert(amount > 0, "Contribution must be greater than zero");
+
+  // Only a salted one-way commitment reaches the public ledger. The amount,
+  // blinding value, and member secret are all private witness data.
+  contributionCommitment =
+    disclose(contributionRecordCommitment(
+               localMemberSecret(),
+               amount as Field as Bytes<32>,
+               privateContributionBlinding(),
+               contributionCount as Field as Bytes<32>
+               ));
+  contributionCount.increment(1);
+}
+
+export circuit claimConfidentially(): [] {
+  assert(status == PoolStatus.SETTLING, "Claims are not open for this round");
+  assert(eligibilityDigest == eligibilityCommitment(eligibilitySecret()),
+         "Private eligibility proof did not verify"
+         );
+
+  const amount = privateClaimAmount();
+  assert(amount > 0, "Claim must be greater than zero");
+
+  claimCommitment =
+    disclose(claimRecordCommitment(
+               localMemberSecret(),
+               amount as Field as Bytes<32>,
+               privateClaimBlinding(),
+               claimCount as Field as Bytes<32>
+               ));
+  claimCount.increment(1);
+}
+
+export circuit beginSettlement(): [] {
+  assert(status == PoolStatus.OPEN, "Pool is not open");
+  assert(settlementAuthorityDigest == settlementAuthorityCommitment(settlementAuthoritySecret()),
+         "Settlement authority proof did not verify"
+         );
+  status = PoolStatus.SETTLING;
+}
+
+export circuit publishRoundAggregates(): [] {
+  assert(status == PoolStatus.SETTLING, "Pool is not settling");
+  assert(settlementAuthorityDigest == settlementAuthorityCommitment(settlementAuthoritySecret()),
+         "Settlement authority proof did not verify"
+         );
+
+  // This is the only witness-derived financial data deliberately disclosed:
+  // anonymized, pool-wide aggregate totals. Individual amounts never appear.
+  aggregateContributions = disclose(reportedContributionAggregate());
+  aggregateClaims = disclose(reportedClaimAggregate());
+  round.increment(1);
+}
+
+export circuit openNextRound(): [] {
+  assert(status == PoolStatus.SETTLING, "Pool is not settling");
+  assert(settlementAuthorityDigest == settlementAuthorityCommitment(settlementAuthoritySecret()),
+         "Settlement authority proof did not verify"
+         );
+  status = PoolStatus.OPEN;
+}
+
+export circuit closePool(): [] {
+  assert(settlementAuthorityDigest == settlementAuthorityCommitment(settlementAuthoritySecret()),
+         "Settlement authority proof did not verify"
+         );
+  status = PoolStatus.CLOSED;
+}
+
+export circuit memberCommitment(secret: Bytes<32>, sequence: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "saha:member:"), sequence, secret]);
+}
+
+// The deployment stores only the hashed credential. A caller proves private
+// eligibility by supplying the original 32-byte secret as a witness; the
+// credential itself is never disclosed or stored on the ledger.
+export circuit eligibilityCommitment(secret: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "saha:eligible:"), secret]);
+}
+
+// Settlement authority is proven by the same secret-knowledge pattern. This
+// keeps an organizer credential out of public state while avoiding a mutable
+// boolean witness that a caller could simply set to true.
+export circuit settlementAuthorityCommitment(secret: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "saha:authority:"), secret]);
+}
+
+export circuit contributionRecordCommitment(
+                 secret: Bytes<32>,
+                 amount: Bytes<32>,
+                 blinding: Bytes<32>,
+                 sequence: Bytes<32>
+                 ): Bytes<32> {
+  return persistentHash<Vector<5, Bytes<32>>>(
+           [pad(32, "saha:contrib:"), secret, amount, blinding, sequence]
+           );
+}
+
+export circuit claimRecordCommitment(
+                 secret: Bytes<32>,
+                 amount: Bytes<32>,
+                 blinding: Bytes<32>,
+                 sequence: Bytes<32>
+                 ): Bytes<32> {
+  return persistentHash<Vector<5, Bytes<32>>>(
+           [pad(32, "saha:claim:"), secret, amount, blinding, sequence]
+           );
+}
