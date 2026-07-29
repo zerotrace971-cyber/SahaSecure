@@ -1,0 +1,40 @@
+{
+  "name": "saha-midnight-private-savings",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run contract:sync && tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "contract:compile": "node scripts/compile-contract.mjs",
+    "contract:format:check": "node scripts/compact-format-check.mjs",
+    "contract:sync": "node scripts/sync-contract-artifacts.mjs",
+    "contract:check": "npm run contract:format:check && npm run contract:compile"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/dapp-connector-api": "4.0.1",
+    "@midnight-ntwrk/midnight-js-contracts": "4.1.1",
+    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "4.1.1",
+    "@midnight-ntwrk/wallet-sdk-address-format": "3.1.2",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "@vitejs/plugin-react": "5.0.2",
+    "typescript": "5.9.2",
+    "vite": "7.1.5",
+    "vite-plugin-top-level-await": "1.5.0",
+    "vite-plugin-wasm": "3.5.0",
+    "vitest": "3.2.4"
+  }
+}
