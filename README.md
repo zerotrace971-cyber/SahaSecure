@@ -9,7 +9,7 @@ Saha is a Preview-only Midnight dApp for private savings circles and confidentia
 - [`contracts/SahaPool.compact`](contracts/SahaPool.compact) is a Compact 0.23 contract compiled with the official Compact CLI. Its generated JS, ZKIR, prover keys, and verifier keys live in [`contracts/managed/saha`](contracts/managed/saha).
 - It uses private witnesses for member, eligibility, authority, amount, and blinding inputs. `disclose()` is deliberate: only public constructor values, opaque commitments, and authorized pool-wide aggregates are written to the ledger.
 - The frontend detects DApp Connector **v4** wallets injected at `window.midnight`, connects to `preview`, gets a wallet proving provider, proves locally/delegated through the wallet, calls `balanceUnsealedTransaction`, then calls `submitTransaction`.
-- `public/zk/saha` is generated from `managed/` before every production build. Vite/Vercel serve the `.bzkir`, prover, and verifier artifacts as static files; no prover, signing key, wallet key, or API key runs on a server.
+- `public/zk/saha-v2` is generated from `managed/` before every production build. Vite/Vercel serve the `.bzkir`, prover, and verifier artifacts as static files; no prover, signing key, wallet key, or API key runs on a server.
 - There is a working interaction path: derive a private eligibility credential commitment, deploy, then join or submit a confidential contribution against an actual Preview contract address.
 
 ## Architecture
@@ -17,7 +17,7 @@ Saha is a Preview-only Midnight dApp for private savings circles and confidentia
 ```text
 Browser + 1AM wallet
   ├─ DApp Connector v4: connect Preview, proving, fee balancing, submission
-  ├─ Static /zk/saha artifacts: ZKIR + proving/verifier keys
+  ├─ Static /zk/saha-v2 artifacts: ZKIR + proving/verifier keys
   └─ Wallet-selected Preview indexer: public contract state + cost model
                          │
                          ▼
@@ -72,11 +72,11 @@ npm run typecheck
 npm run build
 ```
 
-`npm run build` runs `contract:sync` and copies `keys/` and `zkir/` from `managed/` to `public/zk/saha`. That is the path `FetchZkConfigProvider` reads in a deployed Vite app.
+`npm run build` runs `contract:sync` and copies `keys/` and `zkir/` from `managed/` to `public/zk/saha-v2`. That versioned path prevents a browser from reusing a stale verifier-key response from a previous deployment.
 
-`vercel.json` deliberately does **not** include a catch-all SPA rewrite: Saha uses hash navigation, and a catch-all rewrite would return `index.html` for `/zk/saha/...` instead of the binary proving and verifier files.
+`vercel.json` deliberately does **not** include a catch-all SPA rewrite: Saha uses hash navigation, and a catch-all rewrite would return `index.html` for `/zk/saha-v2/...` instead of the binary proving and verifier files.
 
-Vercel is explicitly configured to run `npm run build` and publish `dist/`; this executes the artifact-sync step. A complete deployment serves files such as `/zk/saha/keys/joinPool.verifier` and `/zk/saha/zkir/joinPool.bzkir` directly from the frontend origin.
+Vercel is explicitly configured to run `npm run build` and publish `dist/`; this executes the artifact-sync step. A complete deployment serves files such as `/zk/saha-v2/keys/joinPool.verifier` and `/zk/saha-v2/zkir/joinPool.bzkir` directly from the frontend origin.
 
 ## Preview flow
 

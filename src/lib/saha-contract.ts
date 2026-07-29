@@ -70,7 +70,10 @@ export type PoolSnapshot = {
   commitment: string;
 };
 
-const assetBaseUrl = () => new URL('/zk/saha/', window.location.origin).toString();
+// Keep this in sync with the versioned path emitted by
+// scripts/sync-contract-artifacts.mjs. The version makes a corrected key set
+// a new URL rather than relying on every browser to discard an old response.
+const assetBaseUrl = () => new URL('/zk/saha-v2/', window.location.origin).toString();
 
 const sahaCircuitIds = [
   'joinPool',

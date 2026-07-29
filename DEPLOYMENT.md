@@ -1,6 +1,6 @@
 # Deploy Saha to Vercel
 
-Saha is static hosting only. Vercel serves the Vite bundle and `public/zk/saha`; wallet connection, proving, fee balancing, submission, and Preview indexer requests run in the browser.
+Saha is static hosting only. Vercel serves the Vite bundle and `public/zk/saha-v2`; wallet connection, proving, fee balancing, submission, and Preview indexer requests run in the browser.
 
 ## 1. Verify locally
 
@@ -13,7 +13,7 @@ npm run typecheck
 npm run build
 ```
 
-Confirm `dist/zk/saha/keys` and `dist/zk/saha/zkir` exist after the build. The `.bzkir` files, prover keys, and verifier keys must be deployable static assets.
+Confirm `dist/zk/saha-v2/keys` and `dist/zk/saha-v2/zkir` exist after the build. The `.bzkir` files, prover keys, and verifier keys must be deployable static assets.
 
 ## 2. Configure Vercel
 
@@ -38,7 +38,7 @@ npx vercel
 npx vercel --prod
 ```
 
-After deployment, open `<your-domain>/zk/saha/manifest.json`. A successful response confirms the runtime can fetch its static artifacts from the same origin.
+After deployment, open `<your-domain>/zk/saha-v2/manifest.json`. A successful response confirms the runtime can fetch its static artifacts from the same origin.
 
 ## 4. Preview transaction checklist
 
