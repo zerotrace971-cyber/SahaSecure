@@ -2,6 +2,8 @@
 
 Saha is a Preview-only Midnight dApp for private savings circles and confidential profit-sharing pool records. It is intentionally not a voting app, does not fabricate chain data, and keeps its visual language calm: ivory, sand, deep teal, muted gold, tile geometry, and moon motifs.
 
+**Live website:** [saha-secure.vercel.app](https://saha-secure.vercel.app/)
+
 > **Alpha / no real funds.** Saha currently provides a privacy-preserving membership and contribution-record primitive. It does **not** custody tokens, transfer funds, enforce one-person-one-membership, or implement audited settlement economics. Do not use it with real value.
 
 ## What is real
@@ -11,6 +13,28 @@ Saha is a Preview-only Midnight dApp for private savings circles and confidentia
 - The frontend detects DApp Connector **v4** wallets injected at `window.midnight`, connects to `preview`, gets a wallet proving provider, proves locally/delegated through the wallet, calls `balanceUnsealedTransaction`, then calls `submitTransaction`.
 - `public/zk/saha-v2` is generated from `managed/` before every production build. Vite/Vercel serve the `.bzkir`, prover, and verifier artifacts as static files; no prover, signing key, wallet key, or API key runs on a server.
 - There is a working interaction path: derive a private eligibility credential commitment, deploy, then join or submit a confidential contribution against an actual Preview contract address.
+
+## Website Screenshots
+
+### Sanctuary dashboard
+
+![Saha Sanctuary dashboard](docs/screenshots/01-sanctuary-dashboard.png)
+
+### Pool details and private actions
+
+![Saha Pool details page](docs/screenshots/02-pool-details.png)
+
+### Browser-only pool launchpad
+
+![Saha private-pool launchpad](docs/screenshots/03-private-pool-launchpad.png)
+
+### Privacy model, dark theme
+
+![Saha Privacy model page in dark theme](docs/screenshots/04-privacy-model-dark.png)
+
+### Working CI/CD pipeline
+
+![Successful Saha GitHub Actions verification workflow runs](docs/screenshots/05-working-ci-cd-pipeline.png)
 
 ## Architecture
 
@@ -108,6 +132,15 @@ The present UI wires `joinPool` and `contributeConfidentially`. The remaining au
 ## Deployment
 
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for Vercel instructions and CSP/cache guidance. The deployment needs no environment variables and must not accept wallet or API secrets as Vercel settings.
+
+### Recorded Midnight Preview deployment
+
+| Field | Value |
+| --- | --- |
+| Contract address | `567619712098bc97e42831c57d9e5d6af7a4dee781b7b5c5df4103b9307b34d8` |
+| Deployment transaction hash | `28dccda2b4ab168236634555e16b617f1da9847a607a6c1f2fc4be91d51ebe7b` |
+
+Use the transaction hash in 1AM wallet history or a Midnight Preview explorer to verify its current finalisation status before relying on the deployment.
 
 ## Tests and CI
 
