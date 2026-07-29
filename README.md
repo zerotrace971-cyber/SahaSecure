@@ -74,6 +74,8 @@ npm run build
 
 `npm run build` runs `contract:sync` and copies `keys/` and `zkir/` from `managed/` to `public/zk/saha`. That is the path `FetchZkConfigProvider` reads in a deployed Vite app.
 
+`vercel.json` deliberately does **not** include a catch-all SPA rewrite: Saha uses hash navigation, and a catch-all rewrite would return `index.html` for `/zk/saha/...` instead of the binary proving and verifier files.
+
 ## Preview flow
 
 1. Install and unlock a 1AM wallet supporting Midnight DApp Connector v4, then select **Preview**.

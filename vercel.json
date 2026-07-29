@@ -10,14 +10,12 @@
         {
           "key": "Cross-Origin-Resource-Policy",
           "value": "same-origin"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/octet-stream"
         }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
     }
   ]
 }
