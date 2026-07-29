@@ -83,7 +83,7 @@ npm run build
 5. Wait for a real wallet/network confirmation before sharing the derived address.
 6. In **Pool details**, supply the actual contract address and a valid private eligibility secret. Join privately or submit a positive integer confidential contribution in the token’s smallest unit.
 
-Saha does not display a transaction hash until a wallet returns one through its own activity/history UI. The Connector’s `submitTransaction` method resolves without inventing an identifier, so the app tells users to check their wallet’s confirmed status.
+Saha derives a transaction hash in the browser from the exact sealed transaction returned by the wallet's `balanceUnsealedTransaction` call, then submits those same bytes with `submitTransaction`. It never invents a hash. Use the wallet history to check finalisation status.
 
 The settlement-authority secret also deterministically derives the Compact maintenance signing key using a domain-separated SHA-256 seed inside the browser. This prevents the deployment builder from silently generating and losing a maintenance key. Protect that authority secret accordingly.
 

@@ -5,7 +5,12 @@ import { signingKeyFromBip340 } from '@midnight-ntwrk/compact-runtime';
 import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
-import { LedgerParameters, type CostModel, type UnprovenTransaction } from '@midnight-ntwrk/ledger-v8';
+import {
+  LedgerParameters,
+  Transaction,
+  type CostModel,
+  type UnprovenTransaction,
+} from '@midnight-ntwrk/ledger-v8';
 import {
   createUnprovenCallTxFromInitialStates,
   createUnprovenDeployTxFromVerifierKeys,
@@ -42,6 +47,14 @@ export type ConfidentialContributionInput = {
   contractAddress: string;
   eligibilitySecret: Uint8Array;
   amount: bigint;
+};
+
+export type SubmittedPreviewTransaction = {
+  transactionHash: string;
+};
+
+export type DeployedSahaPool = SubmittedPreviewTransaction & {
+  contractAddress: string;
 };
 
 export type PoolSnapshot = {
@@ -97,12 +110,22 @@ const submitProvenTransaction = async (
   wallet: ConnectedWallet,
   unprovenTx: UnprovenTransaction,
   costModel: CostModel,
-) => {
+): Promise<SubmittedPreviewTransaction> => {
   const keys = new FetchZkConfigProvider<string>(assetBaseUrl());
   const provingProvider = await wallet.api.getProvingProvider(keys.asKeyMaterialProvider());
   const provenTransaction = await unprovenTx.prove(provingProvider, costModel);
   const balanced = await wallet.api.balanceUnsealedTransaction(toHex(provenTransaction.serialize()));
+  // `balanced.tx` is the exact sealed transaction the wallet will submit. Its
+  // hash is derived locally from those bytes, never fabricated or requested
+  // from a backend.
+  const transactionHash = Transaction.deserialize(
+    'signature',
+    'proof',
+    'binding',
+    fromHex(balanced.tx),
+  ).transactionHash();
   await wallet.api.submitTransaction(balanced.tx);
+  return { transactionHash };
 };
 
 const prepareWalletKeys = (wallet: ConnectedWallet) => {
@@ -140,7 +163,10 @@ const maintenanceSigningKeyFromAuthoritySecret = async (authoritySecret: Uint8Ar
   return signingKeyFromBip340(seed);
 };
 
-export const deploySahaPool = async (wallet: ConnectedWallet, input: DeployPoolInput) => {
+export const deploySahaPool = async (
+  wallet: ConnectedWallet,
+  input: DeployPoolInput,
+): Promise<DeployedSahaPool> => {
   const { coinPublicKey, encryptionPublicKey } = prepareWalletKeys(wallet);
   const privateState = buildPrivateState({
     eligibilitySecret: randomBytes(),
@@ -164,13 +190,16 @@ export const deploySahaPool = async (wallet: ConnectedWallet, input: DeployPoolI
 
   // Deploy transactions need the current network cost model. It is read from
   // the indexer selected by the connected wallet, never from a hard-coded host.
-  await submitProvenTransaction(
+  const submission = await submitProvenTransaction(
     wallet,
     deployment.private.unprovenTx,
     await currentPreviewCostModel(wallet),
   );
 
-  return deployment.public.contractAddress;
+  return {
+    contractAddress: deployment.public.contractAddress,
+    transactionHash: submission.transactionHash,
+  };
 };
 
 export const deriveEligibilityDigest = (secret: Uint8Array) =>
@@ -182,7 +211,7 @@ export const deriveSettlementAuthorityDigest = (secret: Uint8Array) =>
 export const joinSahaPool = async (
   wallet: ConnectedWallet,
   input: Pick<ConfidentialContributionInput, 'contractAddress' | 'eligibilitySecret'>,
-) => {
+): Promise<SubmittedPreviewTransaction> => {
   const { coinPublicKey, encryptionPublicKey } = prepareWalletKeys(wallet);
   const contractAddress = input.contractAddress.trim() as ContractAddress;
   const provider = indexerPublicDataProvider(
@@ -208,7 +237,7 @@ export const joinSahaPool = async (
     encryptionPublicKey,
   );
 
-  await submitProvenTransaction(
+  return submitProvenTransaction(
     wallet,
     call.private.unprovenTx,
     publicState[2].transactionCostModel.runtimeCostModel,
@@ -218,7 +247,7 @@ export const joinSahaPool = async (
 export const contributeConfidentially = async (
   wallet: ConnectedWallet,
   input: ConfidentialContributionInput,
-) => {
+): Promise<SubmittedPreviewTransaction> => {
   if (input.amount <= 0n) throw new Error('Contribution amount must be greater than zero.');
   const { coinPublicKey, encryptionPublicKey } = prepareWalletKeys(wallet);
   const contractAddress = input.contractAddress.trim() as ContractAddress;
@@ -249,7 +278,7 @@ export const contributeConfidentially = async (
     encryptionPublicKey,
   );
 
-  await submitProvenTransaction(
+  return submitProvenTransaction(
     wallet,
     call.private.unprovenTx,
     publicState[2].transactionCostModel.runtimeCostModel,
@@ -282,5 +311,5 @@ export const inspectSahaPool = async (wallet: ConnectedWallet, address: string):
 export const humaniseMidnightError = (error: unknown) => {
   const message = errorMessage(error);
   if (message.includes('Pool not found')) return message;
-  return `${message} No transaction identifier is shown until the wallet actually accepts a submission.`;
+  return `${message} Saha only shows a transaction hash after the wallet returns the exact balanced transaction bytes.`;
 };
