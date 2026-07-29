@@ -72,6 +72,48 @@ export type PoolSnapshot = {
 
 const assetBaseUrl = () => new URL('/zk/saha/', window.location.origin).toString();
 
+const sahaCircuitIds = [
+  'joinPool',
+  'contributeConfidentially',
+  'claimConfidentially',
+  'beginSettlement',
+  'publishRoundAggregates',
+  'openNextRound',
+  'closePool',
+] as const;
+
+let verifierKeyCheck: Promise<void> | undefined;
+
+// Give people a usable deployment error before the connector wraps the failed
+// file fetch in a generic ZKConfigurationReadError. Verifier files are tiny,
+// so this avoids pre-downloading the much larger proving keys.
+const verifyPublishedVerifierKeys = () => {
+  verifierKeyCheck ??= (async () => {
+    const baseUrl = assetBaseUrl();
+    const results = await Promise.all(sahaCircuitIds.map(async (circuitId) => {
+      const url = new URL(`keys/${circuitId}.verifier`, baseUrl).toString();
+      try {
+        const response = await fetch(url, { method: 'GET' });
+        const contentType = response.headers.get('content-type') ?? 'unknown content type';
+        const bytes = response.ok ? (await response.arrayBuffer()).byteLength : 0;
+        return { circuitId, url, status: response.status, contentType, bytes };
+      } catch (error) {
+        return { circuitId, url, status: 0, contentType: errorMessage(error), bytes: 0 };
+      }
+    }));
+    const unavailable = results.filter(({ status, contentType, bytes }) =>
+      status !== 200 || bytes === 0 || contentType.includes('text/html'),
+    );
+    if (unavailable.length > 0) {
+      const first = unavailable[0];
+      throw new Error(
+        `This Saha deployment cannot load its ZK verifier keys. ${first.url} returned ${first.status || 'a network error'} (${first.contentType}, ${first.bytes} bytes). Redeploy the Vercel project after its build completes.`,
+      );
+    }
+  })();
+  return verifierKeyCheck;
+};
+
 const buildPrivateState = (input: {
   eligibilitySecret: Uint8Array;
   contributionAmount?: bigint;
@@ -111,6 +153,7 @@ const submitProvenTransaction = async (
   unprovenTx: UnprovenTransaction,
   costModel: CostModel,
 ): Promise<SubmittedPreviewTransaction> => {
+  await verifyPublishedVerifierKeys();
   const keys = new FetchZkConfigProvider<string>(assetBaseUrl());
   const provingProvider = await wallet.api.getProvingProvider(keys.asKeyMaterialProvider());
   const provenTransaction = await unprovenTx.prove(provingProvider, costModel);
@@ -310,6 +353,6 @@ export const inspectSahaPool = async (wallet: ConnectedWallet, address: string):
 
 export const humaniseMidnightError = (error: unknown) => {
   const message = errorMessage(error);
-  if (message.includes('Pool not found')) return message;
+  if (message.includes('Pool not found') || message.includes('This Saha deployment cannot load')) return message;
   return `${message} Saha only shows a transaction hash after the wallet returns the exact balanced transaction bytes.`;
 };

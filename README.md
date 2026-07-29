@@ -76,6 +76,8 @@ npm run build
 
 `vercel.json` deliberately does **not** include a catch-all SPA rewrite: Saha uses hash navigation, and a catch-all rewrite would return `index.html` for `/zk/saha/...` instead of the binary proving and verifier files.
 
+Vercel is explicitly configured to run `npm run build` and publish `dist/`; this executes the artifact-sync step. A complete deployment serves files such as `/zk/saha/keys/joinPool.verifier` and `/zk/saha/zkir/joinPool.bzkir` directly from the frontend origin.
+
 ## Preview flow
 
 1. Install and unlock a 1AM wallet supporting Midnight DApp Connector v4, then select **Preview**.
