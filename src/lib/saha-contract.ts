@@ -75,6 +75,27 @@ export type PoolSnapshot = {
 // a new URL rather than relying on every browser to discard an old response.
 const assetBaseUrl = () => new URL('/zk/saha-v2/', window.location.origin).toString();
 
+// Use the browser's native fetch explicitly. This avoids the package's
+// universal fetch fallback selecting a compatibility transport when the dApp
+// is bundled for Vercel, which can prevent the wallet from reading binary key
+// responses correctly.
+const browserFetch = window.fetch.bind(window) as typeof fetch;
+
+const zkConfigProvider = () =>
+  new FetchZkConfigProvider<string>(assetBaseUrl(), browserFetch);
+
+// DApp Connector receives this object across the wallet-extension boundary.
+// Do not pass the provider class instance directly: its prototype methods rely
+// on `this`, which is not guaranteed to survive a cross-context callback.
+const walletKeyMaterialProvider = () => {
+  const provider = zkConfigProvider();
+  return {
+    getZKIR: (circuitId: string) => provider.getZKIR(circuitId),
+    getProverKey: (circuitId: string) => provider.getProverKey(circuitId),
+    getVerifierKey: (circuitId: string) => provider.getVerifierKey(circuitId),
+  };
+};
+
 const sahaCircuitIds = [
   'joinPool',
   'contributeConfidentially',
@@ -157,8 +178,7 @@ const submitProvenTransaction = async (
   costModel: CostModel,
 ): Promise<SubmittedPreviewTransaction> => {
   await verifyPublishedVerifierKeys();
-  const keys = new FetchZkConfigProvider<string>(assetBaseUrl());
-  const provingProvider = await wallet.api.getProvingProvider(keys.asKeyMaterialProvider());
+  const provingProvider = await wallet.api.getProvingProvider(walletKeyMaterialProvider());
   const provenTransaction = await unprovenTx.prove(provingProvider, costModel);
   const balanced = await wallet.api.balanceUnsealedTransaction(toHex(provenTransaction.serialize()));
   // `balanced.tx` is the exact sealed transaction the wallet will submit. Its
@@ -218,7 +238,7 @@ export const deploySahaPool = async (
     eligibilitySecret: randomBytes(),
     settlementAuthoritySecret: input.settlementAuthoritySecret,
   });
-  const keys = new FetchZkConfigProvider<string>(assetBaseUrl());
+  const keys = zkConfigProvider();
   const deployment = await createUnprovenDeployTxFromVerifierKeys(
     keys,
     coinPublicKey,
@@ -267,7 +287,7 @@ export const joinSahaPool = async (
   const publicState = await provider.queryZSwapAndContractState(contractAddress);
   if (!publicState) throw new Error('Pool not found on the wallet-selected Preview indexer.');
 
-  const keys = new FetchZkConfigProvider<string>(assetBaseUrl());
+  const keys = zkConfigProvider();
   const call = await createUnprovenCallTxFromInitialStates(
     keys,
     {
@@ -308,7 +328,7 @@ export const contributeConfidentially = async (
     eligibilitySecret: input.eligibilitySecret,
     contributionAmount: input.amount,
   });
-  const keys = new FetchZkConfigProvider<string>(assetBaseUrl());
+  const keys = zkConfigProvider();
   const call = await createUnprovenCallTxFromInitialStates(
     keys,
     {
