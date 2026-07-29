@@ -78,10 +78,10 @@ npm run build
 
 1. Install and unlock a 1AM wallet supporting Midnight DApp Connector v4, then select **Preview**.
 2. Open the app. Saha shows an actual injected wallet only; it never simulates a connection or balance.
-3. In **Developer launchpad**, provide the public rules digest and two 32-byte source secrets. Use **Derive Compact commitments locally**; keep the source secrets outside the browser after deployment.
-4. Click **Deploy to Preview**. The dApp asks the wallet for `getProvingProvider`, proves with the static artifact provider, calls `balanceUnsealedTransaction`, and submits with `submitTransaction`.
-5. Wait for a real wallet/network confirmation before sharing the derived address.
-6. In **Pool details**, supply the actual contract address and a valid private eligibility secret. Join privately or submit a positive integer confidential contribution in the token’s smallest unit.
+3. In **Create a private pool**, enter a pool name and the agreement in plain language, then select **Prepare my private pool**. The browser creates the public rules fingerprint, member credential, and organizer recovery key locally. Save the two private values before continuing.
+4. Click **Deploy with 1AM**. The dApp asks the wallet for `getProvingProvider`, proves with the static artifact provider, calls `balanceUnsealedTransaction`, and submits with `submitTransaction`.
+5. Once accepted, the app displays the actual contract address and the exact transaction hash returned by the balanced deployment transaction. Wait for the wallet/network confirmation before sharing the address.
+6. In **Pool details**, supply the displayed contract address and a valid private member credential. Join privately or submit a positive integer confidential contribution in the token’s smallest unit.
 
 Saha derives a transaction hash in the browser from the exact sealed transaction returned by the wallet's `balanceUnsealedTransaction` call, then submits those same bytes with `submitTransaction`. It never invents a hash. Use the wallet history to check finalisation status.
 

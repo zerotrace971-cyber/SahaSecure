@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { WalletOption } from './lib/wallet';
 import { connectPreviewWallet, listPreviewWallets, type ConnectedWallet } from './lib/wallet';
 import {
@@ -11,7 +11,7 @@ import {
   joinSahaPool,
   type PoolSnapshot,
 } from './lib/saha-contract';
-import { bytesToHex, errorMessage, hexToBytes, shortValue } from './lib/format';
+import { bytesToHex, errorMessage, hexToBytes, randomBytes, shortValue } from './lib/format';
 
 type Page = 'dashboard' | 'pool' | 'privacy' | 'activity' | 'guide' | 'launchpad';
 type Notice = { kind: 'success' | 'error' | 'info'; text: string } | null;
@@ -234,39 +234,95 @@ function PrivacyCard({ title, icon, children }: { title: string; icon: string; c
 
 function Activity({ wallet }: { wallet: ConnectedWallet | null }) { return <section><p className="kicker">Activity & history</p><h1>No invented history.<br /><em>Only wallet-confirmed events.</em></h1><div className="empty-history panel"><span>☾</span><h2>{wallet ? 'Your wallet decides what is visible here.' : 'Connect Preview to read wallet activity.'}</h2><p>{wallet ? 'Saha does not create synthetic transaction rows. Use your 1AM wallet history to track the actual transaction identifiers and finalisation states.' : 'When a wallet is connected, Saha will continue to show only real, wallet-provided history.'}</p></div></section>; }
 
-function Guide({ onNavigate }: { onNavigate: (page: Page) => void }) { return <section><p className="kicker">Guide & help</p><h1>Take the circle slowly.</h1><div className="guide-list"><GuideRow number="01" title="Connect 1AM on Preview" detail="Saha detects DApp Connector v4 wallets injected into your browser. Connection, balances, proving, fee balancing, and submission stay client-side." /><GuideRow number="02" title="Create credentials outside the chain" detail="A creator safeguards 32-byte eligibility and authority secrets, then commits their Compact hashes at deployment. Never paste real secrets into a shared chat or public config." /><GuideRow number="03" title="Deploy with the launchpad" detail="The browser downloads Saha’s compiled ZKIR and keys from this static frontend, asks the wallet for a proving provider, balances the proven transaction, then submits it." /><GuideRow number="04" title="Join or contribute privately" detail="Members provide the pool address and their private eligibility secret. A contribution amount becomes a witness and only a blinded commitment is persisted." /></div><button className="button primary" onClick={() => onNavigate('launchpad')}>Open developer launchpad →</button></section>; }
+function Guide({ onNavigate }: { onNavigate: (page: Page) => void }) { return <section><p className="kicker">Guide & help</p><h1>Take the circle slowly.</h1><div className="guide-list"><GuideRow number="01" title="Connect 1AM on Preview" detail="Saha detects DApp Connector v4 wallets injected into your browser. Connection, balances, proving, fee balancing, and submission stay client-side." /><GuideRow number="02" title="Name your circle and set the rules" detail="The launchpad creates the private member credential and organizer recovery key in your browser. You only need to save the values it gives you." /><GuideRow number="03" title="Deploy with the launchpad" detail="The browser downloads Saha’s compiled ZKIR and keys from this static frontend, asks the wallet for a proving provider, balances the proven transaction, then submits it." /><GuideRow number="04" title="Invite and contribute privately" detail="Share the member access credential securely. Members use it with the pool address to prove eligibility without publishing their identity." /></div><button className="button primary" onClick={() => onNavigate('launchpad')}>Create a private pool →</button></section>; }
 function GuideRow({ number, title, detail }: { number: string; title: string; detail: string }) { return <article className="guide-row"><span>{number}</span><div><h2>{title}</h2><p>{detail}</p></div></article>; }
 
+type PreparedPool = {
+  rulesDigest: Uint8Array;
+  rulesDigestHex: string;
+  eligibilitySecret: Uint8Array;
+  eligibilitySecretHex: string;
+  authoritySecret: Uint8Array;
+  authoritySecretHex: string;
+  eligibilityDigest: Uint8Array;
+  eligibilityDigestHex: string;
+  authorityDigest: Uint8Array;
+  authorityDigestHex: string;
+};
+
 function Launchpad({ wallet, busy, setBusy, setNotice }: PageProps) {
-  const [rulesDigest, setRulesDigest] = useState('');
-  const [eligibilitySecret, setEligibilitySecret] = useState('');
-  const [authoritySecret, setAuthoritySecret] = useState('');
-  const [eligibilityDigest, setEligibilityDigest] = useState('');
-  const [authorityDigest, setAuthorityDigest] = useState('');
+  const [poolName, setPoolName] = useState('');
+  const [poolRules, setPoolRules] = useState('');
+  const [preparedPool, setPreparedPool] = useState<PreparedPool | null>(null);
   const [deployedAddress, setDeployedAddress] = useState('');
   const [deployedTransactionHash, setDeployedTransactionHash] = useState('');
 
-  const derive = () => {
+  const resetPreparedPool = () => setPreparedPool(null);
+
+  const preparePool = async () => {
+    const name = poolName.trim();
+    const rules = poolRules.trim();
+    if (!name || !rules) {
+      setNotice({ kind: 'info', text: 'Add a pool name and a short set of rules first.' });
+      return;
+    }
     try {
-      setEligibilityDigest(bytesToHex(deriveEligibilityDigest(hexToBytes(eligibilitySecret, 'Eligibility secret'))));
-      setAuthorityDigest(bytesToHex(deriveSettlementAuthorityDigest(hexToBytes(authoritySecret, 'Settlement authority secret'))));
-      setNotice({ kind: 'success', text: 'Commitments were derived locally with the compiled Saha Compact circuit. Preserve the two source secrets yourself.' });
+      const canonicalRules = JSON.stringify({ version: 1, name, rules });
+      const rulesDigest = new Uint8Array(await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(canonicalRules),
+      ));
+      const eligibilitySecret = randomBytes();
+      const authoritySecret = randomBytes();
+      const eligibilityDigest = deriveEligibilityDigest(eligibilitySecret);
+      const authorityDigest = deriveSettlementAuthorityDigest(authoritySecret);
+      setPreparedPool({
+        rulesDigest,
+        rulesDigestHex: bytesToHex(rulesDigest),
+        eligibilitySecret,
+        eligibilitySecretHex: bytesToHex(eligibilitySecret),
+        authoritySecret,
+        authoritySecretHex: bytesToHex(authoritySecret),
+        eligibilityDigest,
+        eligibilityDigestHex: bytesToHex(eligibilityDigest),
+        authorityDigest,
+        authorityDigestHex: bytesToHex(authorityDigest),
+      });
+      setNotice({ kind: 'success', text: 'Your private pool is ready to deploy. Save the two recovery values before continuing.' });
     } catch (error) { setNotice({ kind: 'error', text: errorMessage(error) }); }
   };
+
+  const copyValue = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice({ kind: 'success', text: `${label} copied to your clipboard.` });
+    } catch {
+      setNotice({ kind: 'info', text: `Copy ${label} manually from the field below.` });
+    }
+  };
+
   const deploy = async (event: FormEvent) => {
     event.preventDefault();
     if (!wallet) return setNotice({ kind: 'info', text: 'Connect a 1AM wallet on Midnight Preview before deploying.' });
+    if (!preparedPool) return setNotice({ kind: 'info', text: 'Prepare your pool and save the recovery values before deploying.' });
     setBusy('deploy'); setNotice(null);
     try {
-      const deployment = await deploySahaPool(wallet, { rulesDigest: hexToBytes(rulesDigest, 'Rules digest'), eligibilityDigest: hexToBytes(eligibilityDigest, 'Eligibility digest'), settlementAuthorityDigest: hexToBytes(authorityDigest, 'Settlement authority digest'), settlementAuthoritySecret: hexToBytes(authoritySecret, 'Settlement authority secret') });
+      const deployment = await deploySahaPool(wallet, {
+        rulesDigest: preparedPool.rulesDigest,
+        eligibilityDigest: preparedPool.eligibilityDigest,
+        settlementAuthorityDigest: preparedPool.authorityDigest,
+        settlementAuthoritySecret: preparedPool.authoritySecret,
+      });
       setDeployedAddress(deployment.contractAddress);
       setDeployedTransactionHash(deployment.transactionHash);
       setNotice({ kind: 'success', text: 'The wallet accepted the deployment transaction. The address and hash below are derived from the actual deployment and balanced transaction.' });
     } catch (error) { setNotice({ kind: 'error', text: humaniseMidnightError(error) }); }
     finally { setBusy(null); }
   };
-  return <section className="launchpad"><p className="kicker">Developer launchpad</p><h1>Start a pool with<br /><em>private roots.</em></h1><p className="lede narrow">This is a browser-only Preview deployment flow. The hosted frontend serves static artifacts; your wallet provides proving, balances fees, and submits. No API key is required or accepted.</p><form className="launchpad-form panel" onSubmit={deploy}><div className="form-columns"><label>Public rules digest<input value={rulesDigest} onChange={(event) => setRulesDigest(event.target.value)} placeholder="32-byte hex digest of the pool rules" required /><small>This is intentionally public. Produce it from the exact rules document your circle signs off on.</small></label><label>Eligibility secret<input type="password" value={eligibilitySecret} onChange={(event) => setEligibilitySecret(event.target.value)} placeholder="32-byte random hex secret" required /><small>Private. Derive a public Compact commitment below; distribute the source credential only to eligible members.</small></label><label>Settlement authority secret<input type="password" value={authoritySecret} onChange={(event) => setAuthoritySecret(event.target.value)} placeholder="32-byte random hex secret" required /><small>Private. Required by settlement state transitions and aggregate reporting.</small></label></div><button className="button ghost" type="button" onClick={derive}>Derive Compact commitments locally</button><div className="derived"><label>Eligibility commitment<input value={eligibilityDigest} onChange={(event) => setEligibilityDigest(event.target.value)} placeholder="Derived 32-byte public commitment" required /></label><label>Authority commitment<input value={authorityDigest} onChange={(event) => setAuthorityDigest(event.target.value)} placeholder="Derived 32-byte public commitment" required /></label></div><div className="launchpad-footer"><p>Alpha disclosure: Saha’s on-chain primitive records confidential membership and contribution commitments. It does not custody assets or enforce one-person-one-membership; do not use it with real funds.</p><button className="button primary" disabled={busy !== null}>{busy === 'deploy' ? 'Proving deployment…' : 'Deploy to Preview →'}</button></div></form>{deployedAddress && <div className="deployment-result panel"><p className="kicker">Actual Preview deployment</p><p>Contract address</p><code>{deployedAddress}</code><p>Transaction hash</p><code>{deployedTransactionHash}</code><p>The hash is calculated from the exact transaction returned by the wallet’s `balanceUnsealedTransaction` call, then submitted directly by that same wallet.</p></div>}</section>;
+  return <section className="launchpad"><p className="kicker">Create a private pool</p><h1>Bring your circle<br /><em>together quietly.</em></h1><p className="lede narrow">Name your pool and describe the agreement in plain language. Saha creates the technical details privately in your browser; 1AM proves, pays fees, and submits on Preview.</p><form className="launchpad-form panel" onSubmit={deploy}><div className="pool-details"><label>Pool name<input value={poolName} onChange={(event) => { setPoolName(event.target.value); resetPreparedPool(); }} placeholder="For example: The Cedar Circle" maxLength={80} required /></label><label>What are the circle’s rules?<textarea value={poolRules} onChange={(event) => { setPoolRules(event.target.value); resetPreparedPool(); }} placeholder="For example: Members contribute monthly. This Preview pool records participation only; no real money is held." maxLength={1000} required /></label></div><div className="launchpad-footer"><p>Saha creates a public fingerprint for these rules in your browser. The full text is not sent to the chain.</p><button className="button ghost" type="button" onClick={preparePool}>Prepare my private pool</button></div>{preparedPool && <section className="credentials-card"><div><p className="kicker">Save before deploying</p><h2>Your circle’s private access</h2><p>These values exist only in this browser session. Save them in a password manager or secure channel. They are never uploaded to Saha.</p></div><Credential label="Member access credential" value={preparedPool.eligibilitySecretHex} action="Copy member credential" onCopy={() => copyValue(preparedPool.eligibilitySecretHex, 'Member access credential')} /><Credential label="Organizer recovery key" value={preparedPool.authoritySecretHex} action="Copy organizer key" onCopy={() => copyValue(preparedPool.authoritySecretHex, 'Organizer recovery key')} /><details className="technical-details"><summary>Technical details</summary><p>Rules fingerprint: <code>{preparedPool.rulesDigestHex}</code></p><p>Eligibility commitment: <code>{preparedPool.eligibilityDigestHex}</code></p><p>Authority commitment: <code>{preparedPool.authorityDigestHex}</code></p></details></section>}<div className="launchpad-footer"><p>Preview alpha: this contract records confidential participation commitments; it does not custody assets or enforce one-person-one-membership. Do not use it with real funds.</p><button className="button primary" disabled={busy !== null || !preparedPool}>{busy === 'deploy' ? 'Proving deployment…' : 'Deploy with 1AM →'}</button></div></form>{deployedAddress && <div className="deployment-result panel"><p className="kicker">Your live Preview pool</p><p>Contract address</p><code>{deployedAddress}</code><button className="button ghost" type="button" onClick={() => copyValue(deployedAddress, 'Contract address')}>Copy contract address</button><p>Transaction hash</p><code>{deployedTransactionHash}</code><button className="button ghost" type="button" onClick={() => copyValue(deployedTransactionHash, 'Transaction hash')}>Copy transaction hash</button><p>The hash is calculated from the exact transaction returned by the wallet’s `balanceUnsealedTransaction` call, then submitted directly by that same wallet.</p></div>}</section>;
 }
+
+function Credential({ label, value, action, onCopy }: { label: string; value: string; action: string; onCopy: () => void }) { return <div className="credential"><p>{label}</p><code>{value}</code><button className="button ghost" type="button" onClick={onCopy}>{action}</button></div>; }
 
 type PageProps = { wallet: ConnectedWallet | null; busy: string | null; setBusy: (value: string | null) => void; setNotice: (value: Notice) => void };
 export default App;
