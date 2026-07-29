@@ -1,0 +1,18 @@
+{
+  "circuits": [
+    "beginSettlement.bzkir",
+    "beginSettlement.zkir",
+    "claimConfidentially.bzkir",
+    "claimConfidentially.zkir",
+    "closePool.bzkir",
+    "closePool.zkir",
+    "contributeConfidentially.bzkir",
+    "contributeConfidentially.zkir",
+    "joinPool.bzkir",
+    "joinPool.zkir",
+    "openNextRound.bzkir",
+    "openNextRound.zkir",
+    "publishRoundAggregates.bzkir",
+    "publishRoundAggregates.zkir"
+  ]
+}
