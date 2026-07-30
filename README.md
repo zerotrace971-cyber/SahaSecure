@@ -3,6 +3,8 @@
 Saha is a Preview-only Midnight dApp for private savings circles and confidential profit-sharing pool records. It is intentionally not a voting app, does not fabricate chain data, and keeps its visual language calm: ivory, sand, deep teal, muted gold, tile geometry, and moon motifs.
 
 **Live website:** [saha-secure.vercel.app](https://saha-secure.vercel.app/)
+**Demo Video Link**  
+https://drive.google.com/file/d/1clfr4-gk-knD4F0criB_wp6iPdZCCzla/view?usp=sharing
 
 > **Alpha / no real funds.** Saha currently provides a privacy-preserving membership and contribution-record primitive. It does **not** custody tokens, transfer funds, enforce one-person-one-membership, or implement audited settlement economics. Do not use it with real value.
 
